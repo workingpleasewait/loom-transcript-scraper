@@ -2,7 +2,9 @@ loom-videos.txt
 loom-videos-processed.txt
 logs.txt
 titles.csv
-
+debug_screenshots/
+debug_output/
+.DS_Store
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
