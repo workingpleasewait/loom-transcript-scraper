@@ -7,6 +7,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException, StaleElementReferenceException
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+import re
+import string
 import os
 import tempfile
 import json
@@ -19,6 +21,10 @@ parser.add_argument('--force', action='store_true',
                     help='Force processing of videos even if they were previously processed')
 parser.add_argument('--preserve', action='store_true', 
                     help='Preserve the input file after processing (do not clear it)')
+parser.add_argument('--process-llm', action='store_true', 
+                help='Process transcripts for LLM after downloading')
+parser.add_argument('--llm-dir', type=str, default="llm_ready_transcripts",
+                help='Directory to store LLM-ready transcripts (default: llm_ready_transcripts')
 args = parser.parse_args()
 
 # File paths
@@ -40,6 +46,16 @@ if not os.path.exists(download_dir):
     os.makedirs(download_dir)
     print(f"Created download directory: {download_dir}")
 else:
+    pass  # No action needed
+    
+# Ensure LLM directory exists if processing for LLM
+if args.process_llm:
+    llm_dir = args.llm_dir
+    if not os.path.exists(llm_dir):
+        os.makedirs(llm_dir)
+        print(f"Created directory for LLM-ready transcripts: {llm_dir}")
+    else:
+        print(f"Using existing directory for LLM-ready transcripts: {llm_dir}")
     print(f"Using existing download directory: {download_dir}")
 # Create a temporary directory for the Chrome user data
 temp_dir = tempfile.mkdtemp()
@@ -72,6 +88,93 @@ service = Service(ChromeDriverManager().install())
 # Initialize the WebDriver
 driver = None
 
+
+# LLM transcript processing functions
+def clean_transcript(text):
+    '''
+    Process transcript text to make it LLM-friendly.
+    
+    Args:
+        text (str): Raw transcript text
+    
+    Returns:
+        str: Cleaned and formatted transcript text
+    '''
+    # Step 1: Preserve timestamps by standardizing their format to [HH:MM:SS]
+    # Step 1: Preserve timestamps by standardizing their format to [HH:MM:SS]
+    # This regex matches common timestamp formats and standardizes them
+    text = re.sub(r'(\[?\(?\s*)(\d{1,2}:\d{2}(?:\d{2})?)\s*(?:\]|\))?', r'[]', text)
+    # Step 2: Normalize line breaks and ensure speaker names are properly formatted
+    # Step 2: Normalize line breaks and ensure speaker names are properly formatted
+    # This helps maintain the conversation structure
+    text = re.sub(r'\n{3,}', '\n\n', text)  # Replace excessive newlines with double newlines
+    # Step 3: Fix common punctuation issues
+    # Step 3: Fix common punctuation issues
+    # Remove duplicate punctuation and ensure proper spacing
+    text = re.sub(r'([.!?])\s*([.!?])+', r'', text)  # Remove duplicate punctuation
+    text = re.sub(r'\s+([.,;:!?])', r'', text)  # Remove space before punctuation
+    text = re.sub(r'([.,;:!?])([^\s\d])', r' ', text)  # Add space after punctuation if missing
+    # Step 4: Normalize whitespace
+    # Remove trailing/leading whitespace from each line and collapse multiple spaces
+    lines = [line.strip() for line in text.split('\n')]
+    text = '\n'.join(lines)
+    text = re.sub(r' +', ' ', text)  # Replace multiple spaces with a single space
+    
+    # Step 5: Remove empty lines while preserving paragraph structure
+    lines = text.split('\n')
+    non_empty_lines = []
+    for i, line in enumerate(lines):
+        # Keep the line if it's not empty or if it's a deliberate paragraph break
+        if line.strip() or (i > 0 and i < len(lines) - 1 and lines[i-1].strip() and lines[i+1].strip()):
+            non_empty_lines.append(line)
+    
+    # Step 6: Final cleanup - remove any remaining problematic characters
+    # (but carefully preserve important special characters)
+    text = '\n'.join(non_empty_lines)
+    
+    # Filter out any non-printable characters except for common line breaks
+    printable_chars = set(string.printable)
+    text = ''.join(c for c in text if c in printable_chars)
+    
+    return text
+
+def process_for_llm(transcript_filepath, llm_dir):
+    '''Process a transcript file for LLM and save to the LLM directory.
+    
+    Args:
+        transcript_filepath (str): Path to the transcript file
+        llm_dir (str): Directory to save LLM-ready transcript
+        
+    Returns:
+        bool: True if successful, False otherwise
+    '''
+    try:
+        # Get the base filename
+        base_name = os.path.basename(transcript_filepath)
+        name_without_ext = os.path.splitext(base_name)[0]
+        llm_filepath = os.path.join(llm_dir, f"{name_without_ext}_llm.txt")
+        
+        # Skip if already processed
+        if os.path.exists(llm_filepath):
+            print(f"LLM version already exists: {llm_filepath}")
+            return False
+        
+        # Read the transcript
+        with open(transcript_filepath, "r", encoding="utf-8") as f:
+            transcript_text = f.read()
+        
+        # Clean and format for LLM
+        processed_text = clean_transcript(transcript_text)
+        
+        # Save to LLM directory
+        with open(llm_filepath, "w", encoding="utf-8") as f:
+            f.write(processed_text)
+        
+        print(f"Created LLM-ready transcript: {llm_filepath}")
+        return True
+    except Exception as e:
+        print(f"Error processing transcript for LLM: {str(e)}")
+        return False
 try:
     driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.set_page_load_timeout(30)
@@ -522,13 +625,17 @@ try:
                     with open(transcript_filepath, "w", encoding="utf-8") as f:
                         f.write(transcript_text)
                     print(f"Transcript saved to: {transcript_filepath}")
+                    # Process for LLM if requested
+                except Exception as e:
+                    print(f"Error saving transcript: {e}")
+                
+                if args.process_llm:
+                    process_for_llm(transcript_filepath, args.llm_dir)
                     
                     # Take a screenshot after saving for debugging
                     after_save_screenshot_path = os.path.join(screenshot_dir, f"after_save_{video_id.replace('/', '_')}.png")
                     driver.save_screenshot(after_save_screenshot_path)
                     print(f"Screenshot after saving transcript saved to {after_save_screenshot_path}")
-                except Exception as e:
-                    print(f"Error saving transcript to file: {str(e)}")
             else:
                 print("Failed to extract transcript text from the page")
                 
