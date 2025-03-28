@@ -12,6 +12,7 @@ This project provides a Python-based solution for scraping transcripts from Loom
 - Transcript extraction from Loom's internal data structure
 - Robust error handling with detailed debugging
 - Support for processing multiple videos in batch
+- LLM transcript processing capabilities for AI model ingestion
 
 ## Prerequisites
 
@@ -54,6 +55,11 @@ This project provides a Python-based solution for scraping transcripts from Loom
 - `data/` - Directory where extracted transcripts are stored
 - `debug_screenshots/` - Directory for browser screenshots (for debugging)
 - `debug_output/` - Directory for HTML page sources and button information (for debugging)
+- `integrated_solution.py` - Integration script for LLM processing
+- `process_llm_integration.py` - Handles LLM transcript processing integration
+- `process_transcripts_for_llm.py` - Processes transcripts for LLM ingestion
+- `README_LLM_INTEGRATION.md` - Detailed guide for LLM integration
+- `IMPLEMENTATION_GUIDE.md` - Implementation guide for LLM processing
 
 ## Debug Directories
 
@@ -74,6 +80,27 @@ This directory contains:
 
 These files provide context and data needed to debug complex web scraping issues, particularly when the target elements are located within shadow DOM or are dynamically loaded.
 
+## LLM Transcript Processing
+
+This project includes functionality to process Loom video transcripts for ingestion into Large Language Models (LLMs). The processing:
+
+- Formats transcripts in a standardized way for optimal LLM consumption
+- Cleans and structures text for better AI processing
+- Supports both integrated and standalone usage approaches
+
+For detailed information about using the LLM transcript processing features, refer to:
+- `README_LLM_INTEGRATION.md` - Contains integration guidelines
+- `IMPLEMENTATION_GUIDE.md` - Provides detailed implementation steps
+
+## LLM Transcript Directory Organization
+
+Transcripts prepared for LLM ingestion are organized as follows:
+
+- Raw transcripts are stored in the configured download directory
+- LLM-ready transcripts are stored in the `llm_ready_transcripts/` directory
+- Each LLM-ready file is named with the video title and ID, with an '_llm' suffix
+- The directory structure preserves the relationship between original videos and their processed transcripts
+
 ## Troubleshooting
 
 If the script fails to extract a transcript:
@@ -90,4 +117,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is open source and available under the [MIT License](LICENSE).
-
